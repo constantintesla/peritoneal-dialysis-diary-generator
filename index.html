@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор дневников перитонеального диализа</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Генератор дневников перитонеального диализа</h1>
+        </header>
+
+        <!-- Панель действий с кнопками -->
+        <div class="action-panel">
+            <button id="generateBtn" class="btn-primary">Сгенерировать дневники</button>
+            <button id="exportPdfBtn" class="btn-secondary" style="display: none;">Экспорт в PDF</button>
+        </div>
+
+        <div class="main-content">
+            <!-- Панель настроек -->
+            <aside class="settings-panel">
+                <h2>Настройки</h2>
+                
+                <div class="setting-group">
+                    <label for="startDate">Начальная дата:</label>
+                    <input type="date" id="startDate" required>
+                </div>
+
+                <div class="setting-group">
+                    <label for="daysCount">Количество дней:</label>
+                    <input type="number" id="daysCount" min="1" max="60" value="30" required>
+                </div>
+
+                <div class="setting-group">
+                    <label for="dialysisScheme">Схема диализа:</label>
+                    <select id="dialysisScheme" required>
+                        <option value="">Выберите схему</option>
+                        <option value="papd4">ПАПД 4 раствора (08.00, 13.00, 18.00, 23.00)</option>
+                        <option value="papd5">ПАПД 5 растворов (08.00, 12.00, 16.00, 20.00, 24.00)</option>
+                        <option value="apd2">АПД 2 раствора (22.00, 22.00)</option>
+                        <option value="apd3_1">АПД 3 раствора (22.00, 22.00, 22.00)</option>
+                        <option value="apd3_2">АПД 3 раствора (22.00, 22.00, 07.00)</option>
+                        <option value="apd4">АПД 4 раствора (22.00, 22.00, 22.00, 07.00)</option>
+                        <option value="custom">Ввести вручную</option>
+                    </select>
+                </div>
+
+                <div class="setting-group" id="customSchemeGroup" style="display: none;">
+                    <label for="customScheme">Время процедур (через запятую, например: 08.00, 13.00, 18.00, 23.00):</label>
+                    <input type="text" id="customScheme" placeholder="08.00, 13.00, 18.00, 23.00">
+                </div>
+
+                <div class="setting-group">
+                    <label for="solutionType">Тип раствора:</label>
+                    <select id="solutionType" required>
+                        <option value="Диасолюшн 1,5%">Диасолюшн 1,5%</option>
+                        <option value="Диасолюшн 2,3%">Диасолюшн 2,3%</option>
+                        <option value="Диасолюшн 4,25%">Диасолюшн 4,25%</option>
+                        <option value="Ультрасолюшн">Ультрасолюшн</option>
+                        <option value="custom">Другой (ввести вручную)</option>
+                    </select>
+                </div>
+
+                <div class="setting-group" id="customSolutionGroup" style="display: none;">
+                    <label for="customSolution">Название раствора:</label>
+                    <input type="text" id="customSolution" placeholder="Например: Дианил 1,36%">
+                </div>
+
+                <div class="setting-group">
+                    <label for="volumeInjected">Объем введенного раствора (мл):</label>
+                    <select id="volumeInjected" required>
+                        <option value="2000">2000 мл</option>
+                        <option value="5000">5000 мл</option>
+                        <option value="custom">Ввести вручную</option>
+                    </select>
+                </div>
+
+                <div class="setting-group" id="customVolumeGroup" style="display: none;">
+                    <label for="customVolume">Объем введенного раствора (мл):</label>
+                    <input type="number" id="customVolume" min="0" step="50" placeholder="Например: 3000">
+                </div>
+
+                <div class="setting-group">
+                    <label>Диапазон объема слитого раствора (мл):</label>
+                    <div class="range-inputs">
+                        <input type="number" id="drainedMin" value="2100" min="0" step="50" required>
+                        <span>—</span>
+                        <input type="number" id="drainedMax" value="2500" min="0" step="50" required>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label>Диапазон систолического АД:</label>
+                    <div class="range-inputs">
+                        <input type="number" id="systolicMin" value="124" min="0" required>
+                        <span>—</span>
+                        <input type="number" id="systolicMax" value="134" min="0" required>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label>Диапазон диастолического АД:</label>
+                    <div class="range-inputs">
+                        <input type="number" id="diastolicMin" value="78" min="0" required>
+                        <span>—</span>
+                        <input type="number" id="diastolicMax" value="86" min="0" required>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="showWeight">
+                        Отображать графу "Вес"
+                    </label>
+                </div>
+
+                <div class="setting-group" id="weightRangeGroup" style="display: none;">
+                    <label>Диапазон веса (кг):</label>
+                    <div class="range-inputs">
+                        <input type="number" id="weightMin" value="60" min="0" step="0.1">
+                        <span>—</span>
+                        <input type="number" id="weightMax" value="90" min="0" step="0.1">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label for="nurseTitle">Должность медперсонала:</label>
+                    <select id="nurseTitle">
+                        <option value="Медицинская сестра">Медицинская сестра</option>
+                        <option value="Медицинский брат">Медицинский брат</option>
+                        <option value="custom">Другая (ввести вручную)</option>
+                    </select>
+                </div>
+
+                <div class="setting-group" id="customNurseTitleGroup" style="display: none;">
+                    <label for="customNurseTitle">Введите должность:</label>
+                    <input type="text" id="customNurseTitle" placeholder="Например: Фельдшер">
+                </div>
+
+                <div class="setting-group">
+                    <label for="nurseName">ФИО медработника:</label>
+                    <input type="text" id="nurseName" placeholder="Иванова И.И.">
+                </div>
+
+                <div class="setting-group">
+                    <label for="doctorName">ФИО врача:</label>
+                    <input type="text" id="doctorName" placeholder="Петров П.П.">
+                </div>
+            </aside>
+
+            <!-- Область предпросмотра -->
+            <main class="preview-area">
+                <div id="previewContainer">
+                    <p class="placeholder">Настройте параметры и нажмите "Сгенерировать дневники"</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
+
