@@ -194,8 +194,6 @@ function generateDiaries() {
     }
 
     generatedDiaries = [];
-    const previewContainer = document.getElementById('previewContainer');
-    previewContainer.innerHTML = '';
 
     // Генерация данных для каждого дня
     for (let day = 0; day < daysCount; day++) {
@@ -253,19 +251,34 @@ function generateDiaries() {
         generatedDiaries.push(diaryData);
     }
 
-    // Отображение дневников (по 5 на страницу)
-    const pages = Math.ceil(generatedDiaries.length / 5);
-    for (let page = 0; page < pages; page++) {
-        const pageDiaries = generatedDiaries.slice(page * 5, (page + 1) * 5);
-        const pageElement = createDiaryPage(pageDiaries, page === pages - 1);
-        previewContainer.appendChild(pageElement);
-    }
-
+    renderPreview();
     document.getElementById('exportPdfBtn').style.display = 'block';
 }
 
+function renderPreview() {
+    const previewContainer = document.getElementById('previewContainer');
+    if (!previewContainer) {
+        return;
+    }
+
+    if (generatedDiaries.length === 0) {
+        previewContainer.innerHTML = '<p class="placeholder">Настройте параметры и нажмите "Сгенерировать дневники"</p>';
+        document.getElementById('exportPdfBtn').style.display = 'none';
+        return;
+    }
+
+    previewContainer.innerHTML = '';
+    const pages = Math.ceil(generatedDiaries.length / 5);
+    for (let page = 0; page < pages; page++) {
+        const offset = page * 5;
+        const pageDiaries = generatedDiaries.slice(offset, offset + 5);
+        const pageElement = createDiaryPage(pageDiaries, page === pages - 1, offset);
+        previewContainer.appendChild(pageElement);
+    }
+}
+
 // Создание страницы с дневниками
-function createDiaryPage(diaries, isLastPage) {
+function createDiaryPage(diaries, isLastPage, pageOffset = 0) {
     const pageDiv = document.createElement('div');
     pageDiv.className = 'diary-page';
 
@@ -274,8 +287,8 @@ function createDiaryPage(diaries, isLastPage) {
     title.textContent = 'Дневник перитонеального диализа';
     pageDiv.appendChild(title);
 
-    diaries.forEach(diary => {
-        const diaryElement = createDiaryItem(diary);
+    diaries.forEach((diary, index) => {
+        const diaryElement = createDiaryItem(diary, pageOffset + index);
         pageDiv.appendChild(diaryElement);
     });
 
@@ -302,7 +315,7 @@ function createDiaryPage(diaries, isLastPage) {
 }
 
 // Создание одного дневника
-function createDiaryItem(diary) {
+function createDiaryItem(diary, diaryIndex) {
     const diaryDiv = document.createElement('div');
     diaryDiv.className = 'diary-item';
 
@@ -337,28 +350,64 @@ function createDiaryItem(diary) {
 
     // Тело таблицы
     const tbody = document.createElement('tbody');
-    diary.procedures.forEach(proc => {
+    diary.procedures.forEach((proc, procIndex) => {
         const row = document.createElement('tr');
-        const cells = [
-            proc.time,
-            proc.solution,
-            proc.volumeInjected,
-            proc.drainedVolume,
-            proc.difference > 0 ? `+${proc.difference}` : proc.difference,
-            proc.temperature,
-            proc.bloodPressure
-        ];
+        row.dataset.diaryIndex = diaryIndex;
+        row.dataset.procIndex = procIndex;
+
+        // Время (не редактируется)
+        const timeCell = document.createElement('td');
+        timeCell.textContent = proc.time;
+        row.appendChild(timeCell);
+
+        // Вид раствора (выпадающий список)
+        const solutionCell = document.createElement('td');
+        const solutionSelect = createSolutionSelect(diaryIndex, procIndex, proc.solution);
+        solutionCell.appendChild(solutionSelect);
+        row.appendChild(solutionCell);
+
+        // Объем введенного
+        const injectedCell = document.createElement('td');
+        injectedCell.textContent = proc.volumeInjected;
+        makeCellEditable(injectedCell, diaryIndex, procIndex, 'volumeInjected');
+        row.appendChild(injectedCell);
+
+        // Объем слитого
+        const drainedCell = document.createElement('td');
+        drainedCell.textContent = proc.drainedVolume;
+        makeCellEditable(drainedCell, diaryIndex, procIndex, 'drainedVolume');
+        row.appendChild(drainedCell);
+
+        // Разница
+        const differenceCell = document.createElement('td');
+        differenceCell.textContent = formatDifference(proc.difference);
+        makeCellEditable(differenceCell, diaryIndex, procIndex, 'difference');
+        row.appendChild(differenceCell);
+
+        // Температура
+        const temperatureCell = document.createElement('td');
+        temperatureCell.textContent = proc.temperature;
+        makeCellEditable(temperatureCell, diaryIndex, procIndex, 'temperature');
+        row.appendChild(temperatureCell);
+
+        // АД
+        const bpCell = document.createElement('td');
+        bpCell.textContent = proc.bloodPressure;
+        makeCellEditable(bpCell, diaryIndex, procIndex, 'bloodPressure');
+        row.appendChild(bpCell);
 
         if (proc.weight !== null) {
-            cells.push(proc.weight);
+            const weightCell = document.createElement('td');
+            weightCell.textContent = proc.weight;
+            row.appendChild(weightCell);
         }
-        cells.push(proc.notes);
 
-        cells.forEach(cellText => {
-            const td = document.createElement('td');
-            td.textContent = cellText;
-            row.appendChild(td);
-        });
+        // Особенности
+        const notesCell = document.createElement('td');
+        notesCell.textContent = proc.notes;
+        makeCellEditable(notesCell, diaryIndex, procIndex, 'notes');
+        row.appendChild(notesCell);
+
         tbody.appendChild(row);
     });
 
@@ -374,9 +423,12 @@ function createDiaryItem(diary) {
     }
     totalCells.push('');
 
-    totalCells.forEach(cellText => {
+    totalCells.forEach((cellText, cellIndex) => {
         const td = document.createElement('td');
         td.textContent = cellText;
+        if (cellIndex === 4) {
+            td.dataset.totalDifference = 'true';
+        }
         totalRow.appendChild(td);
     });
     tbody.appendChild(totalRow);
@@ -395,6 +447,181 @@ function createDiaryItem(diary) {
     diaryDiv.appendChild(signatures);
 
     return diaryDiv;
+}
+
+function getAvailableSolutionOptions(currentSolution) {
+    const solutionSelect = document.getElementById('solutionType');
+    const options = new Set();
+
+    if (solutionSelect) {
+        Array.from(solutionSelect.options).forEach(option => {
+            if (option.value && option.value !== 'custom') {
+                options.add(option.value);
+            }
+        });
+    }
+
+    const customSolutionInput = document.getElementById('customSolution');
+    if (customSolutionInput && customSolutionInput.value.trim()) {
+        options.add(customSolutionInput.value.trim());
+    }
+
+    if (currentSolution) {
+        options.add(currentSolution);
+    }
+
+    return Array.from(options);
+}
+
+function createSolutionSelect(diaryIndex, procIndex, currentSolution) {
+    const select = document.createElement('select');
+    select.className = 'diary-solution-select';
+    select.dataset.diaryIndex = diaryIndex;
+    select.dataset.procIndex = procIndex;
+
+    const options = getAvailableSolutionOptions(currentSolution);
+    options.forEach(optionValue => {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = optionValue;
+        if (optionValue === currentSolution) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+
+    select.addEventListener('change', handleSolutionChange);
+    return select;
+}
+
+function handleSolutionChange(event) {
+    const select = event.target;
+    const diaryIndex = parseInt(select.dataset.diaryIndex, 10);
+    const procIndex = parseInt(select.dataset.procIndex, 10);
+
+    if (Number.isNaN(diaryIndex) || Number.isNaN(procIndex)) {
+        return;
+    }
+
+    const diary = generatedDiaries[diaryIndex];
+    if (!diary) {
+        return;
+    }
+
+    const procedure = diary.procedures[procIndex];
+    if (!procedure) {
+        return;
+    }
+
+    procedure.solution = select.value;
+}
+
+function makeCellEditable(td, diaryIndex, procIndex, field) {
+    td.contentEditable = 'true';
+    td.spellcheck = false;
+    td.dataset.diaryIndex = diaryIndex;
+    td.dataset.procIndex = procIndex;
+    td.dataset.field = field;
+    td.addEventListener('blur', handleEditableCellBlur);
+}
+
+function handleEditableCellBlur(event) {
+    const td = event.target;
+    const field = td.dataset.field;
+    const diaryIndex = parseInt(td.dataset.diaryIndex, 10);
+    const procIndex = parseInt(td.dataset.procIndex, 10);
+
+    if (!field || Number.isNaN(diaryIndex) || Number.isNaN(procIndex)) {
+        return;
+    }
+
+    const diary = generatedDiaries[diaryIndex];
+    if (!diary) {
+        return;
+    }
+
+    const procedure = diary.procedures[procIndex];
+    if (!procedure) {
+        return;
+    }
+
+    const rawValue = td.textContent.trim();
+
+    if (field === 'volumeInjected' || field === 'drainedVolume' || field === 'difference') {
+        const numericValue = parseInt(rawValue.replace(/[^\d+-]/g, ''), 10);
+        if (Number.isNaN(numericValue)) {
+            td.textContent = formatFieldValue(procedure[field], field);
+            return;
+        }
+
+        if (field === 'difference') {
+            procedure.difference = numericValue;
+        } else {
+            procedure[field] = numericValue;
+            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
+            updateRowDifferenceCell(td.closest('tr'), procedure.difference);
+        }
+
+        diary.totalDifference = diary.procedures.reduce((sum, proc) => sum + (proc.difference || 0), 0);
+        updateTotalDifferenceCell(td.closest('table'), diary.totalDifference);
+        td.textContent = formatFieldValue(procedure[field], field);
+        return;
+    }
+
+    if (field === 'temperature') {
+        procedure.temperature = rawValue || procedure.temperature;
+        td.textContent = procedure.temperature;
+        return;
+    }
+
+    if (field === 'bloodPressure') {
+        procedure.bloodPressure = rawValue || procedure.bloodPressure;
+        td.textContent = procedure.bloodPressure;
+        return;
+    }
+
+    if (field === 'notes') {
+        procedure.notes = rawValue || '';
+        td.textContent = procedure.notes;
+    }
+}
+
+function updateRowDifferenceCell(row, differenceValue) {
+    if (!row) {
+        return;
+    }
+    const differenceCell = row.querySelector('[data-field="difference"]');
+    if (differenceCell) {
+        differenceCell.textContent = formatDifference(differenceValue);
+    }
+}
+
+function updateTotalDifferenceCell(table, totalDifference) {
+    if (!table) {
+        return;
+    }
+    const totalCell = table.querySelector('[data-total-difference="true"]');
+    if (totalCell) {
+        totalCell.textContent = formatDifference(totalDifference);
+    }
+}
+
+function formatDifference(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+        return '';
+    }
+    const numericValue = Number(value);
+    if (numericValue > 0) {
+        return `+${numericValue}`;
+    }
+    return `${numericValue}`;
+}
+
+function formatFieldValue(value, field) {
+    if (field === 'difference') {
+        return formatDifference(value);
+    }
+    return value != null ? String(value) : '';
 }
 
 // Создание формального дневника для PDF
