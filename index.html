@@ -53,7 +53,13 @@
                 </div>
 
                 <div class="setting-group">
-                    <label for="solutionType">Тип раствора:</label>
+                    <label>Настройки манипуляций:</label>
+                    <button type="button" id="openProceduresModalBtn" class="btn-outline" disabled>Открыть попап</button>
+                    <small class="setting-hint">Появится после выбора схемы и ввода времени процедур.</small>
+                </div>
+
+                <div class="setting-group">
+                    <label for="solutionType">Тип раствора (глобальное значение):</label>
                     <select id="solutionType" required>
                         <option value="Диасолюшн 1,5%">Диасолюшн 1,5%</option>
                         <option value="Диасолюшн 2,3%">Диасолюшн 2,3%</option>
@@ -69,7 +75,7 @@
                 </div>
 
                 <div class="setting-group">
-                    <label for="volumeInjected">Объем введенного раствора (мл):</label>
+                    <label for="volumeInjected">Объем введенного раствора (мл) (глобальное значение):</label>
                     <select id="volumeInjected" required>
                         <option value="2000">2000 мл</option>
                         <option value="5000">5000 мл</option>
@@ -83,7 +89,7 @@
                 </div>
 
                 <div class="setting-group">
-                    <label>Диапазон объема слитого раствора (мл):</label>
+                    <label>Диапазон объема слитого раствора (мл) (глобальное значение):</label>
                     <div class="range-inputs">
                         <input type="number" id="drainedMin" value="2100" min="0" step="50" required>
                         <span>—</span>
@@ -156,6 +162,24 @@
                     <p class="placeholder">Настройте параметры и нажмите "Сгенерировать дневники"</p>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- Попап с настройками манипуляций -->
+    <div id="proceduresModal" class="modal" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="proceduresModalTitle">
+            <div class="modal-header">
+                <h3 id="proceduresModalTitle">Настройки манипуляций</h3>
+                <button type="button" id="closeProceduresModalBtn" class="modal-close" aria-label="Закрыть попап">&times;</button>
+            </div>
+            <div class="modal-actions">
+                <button type="button" id="applyGlobalValuesBtn" class="btn-apply-global">Применить глобальные значения</button>
+            </div>
+            <div id="proceduresSettingsContainer" class="procedures-settings-container"></div>
+            <div class="modal-footer">
+                <button type="button" id="closeProceduresModalFooterBtn" class="btn-secondary">Отмена</button>
+                <button type="button" id="saveProceduresBtn" class="btn-primary">Готово</button>
+            </div>
         </div>
     </div>
 

@@ -9,6 +9,7 @@ const dialysisSchemes = {
 };
 
 let generatedDiaries = [];
+let procedureTemplates = []; // Шаблоны для каждой манипуляции
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
@@ -24,8 +25,30 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('showWeight').addEventListener('change', handleWeightToggle);
     document.getElementById('generateBtn').addEventListener('click', generateDiaries);
     document.getElementById('exportPdfBtn').addEventListener('click', exportToPDF);
+    document.getElementById('applyGlobalValuesBtn').addEventListener('click', applyGlobalValuesToProcedures);
+    document.getElementById('customScheme').addEventListener('input', handleCustomSchemeInput);
+    document.getElementById('customSolution').addEventListener('input', updateAllProcedureSolutionSelects);
+    const openProceduresButton = document.getElementById('openProceduresModalBtn');
+    if (openProceduresButton) {
+        openProceduresButton.addEventListener('click', openProceduresModal);
+    }
+    document.getElementById('closeProceduresModalBtn').addEventListener('click', closeProceduresModal);
+    document.getElementById('closeProceduresModalFooterBtn').addEventListener('click', closeProceduresModal);
+    document.getElementById('saveProceduresBtn').addEventListener('click', () => {
+        closeProceduresModal();
+    });
+    const proceduresModal = document.getElementById('proceduresModal');
+    if (proceduresModal) {
+        proceduresModal.addEventListener('click', (event) => {
+            if (event.target === proceduresModal) {
+                closeProceduresModal();
+            }
+        });
+    }
 
     handleNurseTitleChange();
+    showProceduresEmptyState('Выберите схему диализа, чтобы настроить манипуляции');
+    setProceduresControlsAvailability(false);
 });
 
 function handleSolutionTypeChange() {
@@ -36,6 +59,46 @@ function handleSolutionTypeChange() {
     } else {
         customGroup.style.display = 'none';
     }
+    
+    // Обновляем выпадающие списки в настройках манипуляций
+    updateAllProcedureSolutionSelects();
+}
+
+function updateAllProcedureSolutionSelects() {
+    const selects = document.querySelectorAll('.procedure-solution-select');
+    selects.forEach(select => {
+        const currentValue = select.value;
+        populateSolutionSelect(select, currentValue);
+    });
+}
+
+function setProceduresControlsAvailability(isEnabled) {
+    const openBtn = document.getElementById('openProceduresModalBtn');
+    if (openBtn) {
+        openBtn.disabled = !isEnabled;
+        openBtn.textContent = isEnabled ? 'Настроить манипуляции' : 'Открыть попап';
+    }
+    if (!isEnabled) {
+        closeProceduresModal();
+    }
+}
+
+function showProceduresEmptyState(message = 'Выберите схему диализа, чтобы настроить манипуляции') {
+    const container = document.getElementById('proceduresSettingsContainer');
+    if (!container) {
+        return;
+    }
+    const info = document.createElement('p');
+    info.className = 'procedures-empty-state';
+    info.textContent = message;
+    container.innerHTML = '';
+    container.appendChild(info);
+}
+
+function resetProcedureTemplates(message) {
+    procedureTemplates = [];
+    showProceduresEmptyState(message);
+    setProceduresControlsAvailability(false);
 }
 
 function handleDialysisSchemeChange() {
@@ -43,9 +106,267 @@ function handleDialysisSchemeChange() {
     const customGroup = document.getElementById('customSchemeGroup');
     if (scheme === 'custom') {
         customGroup.style.display = 'block';
+        // Проверяем, есть ли уже введенное время
+        const customScheme = document.getElementById('customScheme').value.trim();
+        if (customScheme) {
+            const times = customScheme.split(',').map(t => t.trim()).filter(t => t);
+            if (times.length > 0) {
+                createProcedureTemplates(times);
+            } else {
+                resetProcedureTemplates('Введите корректное время процедур, чтобы настроить манипуляции');
+            }
+        } else {
+            resetProcedureTemplates('Введите время процедур, чтобы настроить манипуляции');
+        }
+    } else if (scheme) {
+        customGroup.style.display = 'none';
+        const schemeData = dialysisSchemes[scheme];
+        if (schemeData) {
+            createProcedureTemplates(schemeData.times);
+        } else {
+            resetProcedureTemplates();
+        }
     } else {
         customGroup.style.display = 'none';
+        resetProcedureTemplates();
     }
+}
+
+function handleCustomSchemeInput() {
+    const schemeKey = document.getElementById('dialysisScheme').value;
+    if (schemeKey !== 'custom') {
+        return; // Обрабатываем только если выбрана кастомная схема
+    }
+    
+    const customScheme = document.getElementById('customScheme').value.trim();
+    if (customScheme) {
+        const times = customScheme.split(',').map(t => t.trim()).filter(t => t);
+        if (times.length > 0) {
+            createProcedureTemplates(times);
+        } else {
+            resetProcedureTemplates('Введите корректное время процедур, чтобы настроить манипуляции');
+        }
+    } else {
+        resetProcedureTemplates('Введите время процедур, чтобы настроить манипуляции');
+    }
+}
+
+function createProcedureTemplates(times) {
+    procedureTemplates = [];
+    const container = document.getElementById('proceduresSettingsContainer');
+    container.innerHTML = '';
+    
+    // Получаем глобальные значения для инициализации
+    const globalSolution = getGlobalSolution();
+    const globalVolume = getGlobalVolume();
+    const globalDrainedMin = parseInt(document.getElementById('drainedMin').value) || 2100;
+    const globalDrainedMax = parseInt(document.getElementById('drainedMax').value) || 2500;
+    const globalDifference = Math.round((globalDrainedMin + globalDrainedMax) / 2) - globalVolume;
+    
+    times.forEach((time, index) => {
+        const template = {
+            time: time,
+            solution: globalSolution,
+            volumeInjected: globalVolume,
+            difference: globalDifference
+        };
+        procedureTemplates.push(template);
+        
+        // Создаем UI элемент
+        const item = document.createElement('div');
+        item.className = 'procedure-setting-item';
+        item.dataset.procIndex = index;
+        
+        const title = document.createElement('h4');
+        title.textContent = `Манипуляция ${index + 1}: ${time}`;
+        item.appendChild(title);
+        
+        // Раствор
+        const solutionRow = document.createElement('div');
+        solutionRow.className = 'procedure-setting-row';
+        const solutionLabel = document.createElement('label');
+        solutionLabel.textContent = 'Раствор:';
+        const solutionSelect = document.createElement('select');
+        solutionSelect.className = 'procedure-solution-select';
+        solutionSelect.dataset.procIndex = index;
+        populateSolutionSelect(solutionSelect, template.solution);
+        solutionSelect.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.procIndex);
+            procedureTemplates[idx].solution = e.target.value;
+        });
+        solutionRow.appendChild(solutionLabel);
+        const solutionWrapper = document.createElement('div');
+        solutionWrapper.appendChild(solutionSelect);
+        solutionRow.appendChild(solutionWrapper);
+        item.appendChild(solutionRow);
+        
+        // Объем введенного
+        const volumeRow = document.createElement('div');
+        volumeRow.className = 'procedure-setting-row';
+        const volumeLabel = document.createElement('label');
+        volumeLabel.textContent = 'Объем введенного (мл):';
+        const volumeInput = document.createElement('input');
+        volumeInput.type = 'number';
+        volumeInput.min = '0';
+        volumeInput.step = '50';
+        volumeInput.value = template.volumeInjected;
+        volumeInput.className = 'procedure-volume-input';
+        volumeInput.dataset.procIndex = index;
+        volumeInput.addEventListener('input', (e) => {
+            const idx = parseInt(e.target.dataset.procIndex);
+            const volume = parseInt(e.target.value) || 0;
+            procedureTemplates[idx].volumeInjected = volume;
+            updateDifferenceInput(idx);
+        });
+        volumeRow.appendChild(volumeLabel);
+        const volumeWrapper = document.createElement('div');
+        volumeWrapper.appendChild(volumeInput);
+        volumeRow.appendChild(volumeWrapper);
+        item.appendChild(volumeRow);
+        
+        // Ультрафильтрация (разница)
+        const diffRow = document.createElement('div');
+        diffRow.className = 'procedure-setting-row';
+        const diffLabel = document.createElement('label');
+        diffLabel.textContent = 'Ультрафильтрация (мл):';
+        const diffInput = document.createElement('input');
+        diffInput.type = 'number';
+        diffInput.step = '50';
+        diffInput.value = template.difference;
+        diffInput.className = 'procedure-difference-input';
+        diffInput.dataset.procIndex = index;
+        diffInput.addEventListener('input', (e) => {
+            const idx = parseInt(e.target.dataset.procIndex);
+            procedureTemplates[idx].difference = parseInt(e.target.value) || 0;
+        });
+        diffRow.appendChild(diffLabel);
+        const diffWrapper = document.createElement('div');
+        diffWrapper.appendChild(diffInput);
+        diffRow.appendChild(diffWrapper);
+        item.appendChild(diffRow);
+        
+        container.appendChild(item);
+    });
+    if (procedureTemplates.length > 0) {
+        setProceduresControlsAvailability(true);
+    }
+}
+
+function updateDifferenceInput(procIndex) {
+    const item = document.querySelector(`[data-proc-index="${procIndex}"]`);
+    if (!item) return;
+    
+    const diffInput = item.querySelector('.procedure-difference-input');
+    if (diffInput && procedureTemplates[procIndex]) {
+        // Можно оставить текущее значение или пересчитать
+        // Оставляем текущее значение, чтобы пользователь мог его редактировать
+    }
+}
+
+function populateSolutionSelect(select, currentValue) {
+    const solutionTypeSelect = document.getElementById('solutionType');
+    const options = new Set();
+    
+    if (solutionTypeSelect) {
+        Array.from(solutionTypeSelect.options).forEach(option => {
+            if (option.value && option.value !== 'custom') {
+                options.add(option.value);
+            }
+        });
+    }
+    
+    const customSolutionInput = document.getElementById('customSolution');
+    if (customSolutionInput && customSolutionInput.value.trim()) {
+        options.add(customSolutionInput.value.trim());
+    }
+    
+    if (currentValue) {
+        options.add(currentValue);
+    }
+    
+    select.innerHTML = '';
+    Array.from(options).forEach(optionValue => {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = optionValue;
+        if (optionValue === currentValue) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+}
+
+function getGlobalSolution() {
+    const solutionType = document.getElementById('solutionType').value;
+    const customSolution = document.getElementById('customSolution').value.trim();
+    return solutionType === 'custom' ? customSolution : (solutionType || 'Диасолюшн 1,5%');
+}
+
+function getGlobalVolume() {
+    const volumeInjectedValue = document.getElementById('volumeInjected').value;
+    const customVolume = document.getElementById('customVolume').value;
+    
+    if (volumeInjectedValue === 'custom') {
+        return parseInt(customVolume) || 2000;
+    }
+    return parseInt(volumeInjectedValue) || 2000;
+}
+
+function applyGlobalValuesToProcedures() {
+    const globalSolution = getGlobalSolution();
+    const globalVolume = getGlobalVolume();
+    const globalDrainedMin = parseInt(document.getElementById('drainedMin').value) || 2100;
+    const globalDrainedMax = parseInt(document.getElementById('drainedMax').value) || 2500;
+    const globalDifference = Math.round((globalDrainedMin + globalDrainedMax) / 2) - globalVolume;
+    
+    procedureTemplates.forEach((template, index) => {
+        template.solution = globalSolution;
+        template.volumeInjected = globalVolume;
+        template.difference = globalDifference;
+        
+        // Обновляем UI
+        const item = document.querySelector(`[data-proc-index="${index}"]`);
+        if (item) {
+            const solutionSelect = item.querySelector('.procedure-solution-select');
+            if (solutionSelect) {
+                populateSolutionSelect(solutionSelect, globalSolution);
+            }
+            
+            const volumeInput = item.querySelector('.procedure-volume-input');
+            if (volumeInput) {
+                volumeInput.value = globalVolume;
+            }
+            
+            const diffInput = item.querySelector('.procedure-difference-input');
+            if (diffInput) {
+                diffInput.value = globalDifference;
+            }
+        }
+    });
+}
+
+function openProceduresModal() {
+    if (!procedureTemplates.length) {
+        alert('Сначала выберите схему диализа и настройте манипуляции.');
+        return;
+    }
+    const modal = document.getElementById('proceduresModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('visible');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+}
+
+function closeProceduresModal() {
+    const modal = document.getElementById('proceduresModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.remove('visible');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
 }
 
 function handleVolumeInjectedChange() {
@@ -185,11 +506,9 @@ function generateDiaries() {
         scheme = dialysisSchemes[schemeKey];
     }
     
-    // Определяем тип раствора
-    const solution = solutionType === 'custom' ? customSolution : solutionType;
-
-    if (solutionType === 'custom' && !customSolution) {
-        alert('Введите название раствора');
+    // Проверяем наличие шаблонов манипуляций
+    if (procedureTemplates.length === 0 || procedureTemplates.length !== scheme.times.length) {
+        alert('Пожалуйста, настройте параметры манипуляций');
         return;
     }
 
@@ -203,8 +522,6 @@ function generateDiaries() {
         const diaryData = {
             date: currentDate,
             scheme: scheme,
-            solution: solution,
-            volumeInjected: volumeInjected,
             procedures: []
         };
 
@@ -220,10 +537,18 @@ function generateDiaries() {
             };
         });
 
-        // Генерация данных для каждой процедуры
+        // Генерация данных для каждой процедуры на основе шаблонов
         scheme.times.forEach((time, index) => {
-            const drainedVolume = generateDrainedVolume(volumeInjected, drainedMin, drainedMax);
-            const difference = drainedVolume - volumeInjected;
+            const template = procedureTemplates[index];
+            if (!template) {
+                console.error(`Шаблон для манипуляции ${index} не найден`);
+                return;
+            }
+
+            // Используем значения из шаблона
+            const volumeInjected = template.volumeInjected || 2000;
+            const difference = template.difference || 0;
+            const drainedVolume = volumeInjected + difference;
             totalDifference += difference;
 
             // Используем одинаковые значения температуры и АД для одинакового времени
@@ -231,7 +556,7 @@ function generateDiaries() {
 
             const procedure = {
                 time: time,
-                solution: solution,
+                solution: template.solution || getGlobalSolution(),
                 volumeInjected: volumeInjected,
                 drainedVolume: drainedVolume,
                 difference: difference,
