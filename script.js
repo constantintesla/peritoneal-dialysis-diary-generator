@@ -326,6 +326,7 @@ function createDiaryItem(diary, diaryIndex) {
 
     const table = document.createElement('table');
     table.className = 'diary-table';
+    table.dataset.diaryIndex = diaryIndex;
 
     // Заголовки таблицы
     const thead = document.createElement('thead');
@@ -428,6 +429,7 @@ function createDiaryItem(diary, diaryIndex) {
         td.textContent = cellText;
         if (cellIndex === 4) {
             td.dataset.totalDifference = 'true';
+            td.dataset.diaryIndex = diaryIndex;
         }
         totalRow.appendChild(td);
     });
@@ -513,7 +515,10 @@ function handleSolutionChange(event) {
         return;
     }
 
-    procedure.solution = select.value;
+    const selectedValue = select.value;
+    const options = getAvailableSolutionOptions(selectedValue);
+    applyValueAcrossDiaries(procIndex, 'solution', selectedValue);
+    updateSolutionSelects(procIndex, options);
 }
 
 function makeCellEditable(td, diaryIndex, procIndex, field) {
@@ -554,35 +559,19 @@ function handleEditableCellBlur(event) {
             return;
         }
 
-        if (field === 'difference') {
-            procedure.difference = numericValue;
-        } else {
-            procedure[field] = numericValue;
-            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
-            updateRowDifferenceCell(td.closest('tr'), procedure.difference);
+        const differenceChanged = applyValueAcrossDiaries(procIndex, field, numericValue);
+        updateEditableCells(procIndex, field);
+        if (differenceChanged) {
+            updateEditableCells(procIndex, 'difference');
+            updateAllTotalDifferenceCells();
         }
-
-        diary.totalDifference = diary.procedures.reduce((sum, proc) => sum + (proc.difference || 0), 0);
-        updateTotalDifferenceCell(td.closest('table'), diary.totalDifference);
-        td.textContent = formatFieldValue(procedure[field], field);
         return;
     }
 
-    if (field === 'temperature') {
-        procedure.temperature = rawValue || procedure.temperature;
-        td.textContent = procedure.temperature;
-        return;
-    }
-
-    if (field === 'bloodPressure') {
-        procedure.bloodPressure = rawValue || procedure.bloodPressure;
-        td.textContent = procedure.bloodPressure;
-        return;
-    }
-
-    if (field === 'notes') {
-        procedure.notes = rawValue || '';
-        td.textContent = procedure.notes;
+    if (field === 'temperature' || field === 'bloodPressure' || field === 'notes') {
+        const valueToApply = rawValue || (field === 'notes' ? '' : procedure[field]);
+        applyValueAcrossDiaries(procIndex, field, valueToApply);
+        updateEditableCells(procIndex, field);
     }
 }
 
@@ -622,6 +611,113 @@ function formatFieldValue(value, field) {
         return formatDifference(value);
     }
     return value != null ? String(value) : '';
+}
+
+function applyValueAcrossDiaries(procIndex, field, value) {
+    let differenceChanged = false;
+
+    generatedDiaries.forEach(diary => {
+        const procedure = diary.procedures[procIndex];
+        if (!procedure) {
+            return;
+        }
+
+        if (field === 'volumeInjected') {
+            procedure.volumeInjected = value;
+            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
+            differenceChanged = true;
+        } else if (field === 'drainedVolume') {
+            procedure.drainedVolume = value;
+            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
+            differenceChanged = true;
+        } else if (field === 'difference') {
+            procedure.difference = value;
+            differenceChanged = true;
+        } else if (field === 'temperature') {
+            procedure.temperature = value;
+        } else if (field === 'bloodPressure') {
+            procedure.bloodPressure = value;
+        } else if (field === 'notes') {
+            procedure.notes = value;
+        } else if (field === 'solution') {
+            procedure.solution = value;
+        }
+    });
+
+    if (differenceChanged) {
+        generatedDiaries.forEach(diary => {
+            diary.totalDifference = diary.procedures.reduce((sum, proc) => sum + (proc.difference || 0), 0);
+        });
+    }
+
+    return differenceChanged;
+}
+
+function updateEditableCells(procIndex, field) {
+    const cells = document.querySelectorAll(`[data-field="${field}"][data-proc-index="${procIndex}"]`);
+    cells.forEach(cell => {
+        const diaryIndex = parseInt(cell.dataset.diaryIndex, 10);
+        const diary = generatedDiaries[diaryIndex];
+        if (!diary) {
+            return;
+        }
+        const proc = diary.procedures[procIndex];
+        if (!proc) {
+            return;
+        }
+        if (field === 'difference') {
+            cell.textContent = formatDifference(proc.difference);
+        } else {
+            cell.textContent = formatFieldValue(proc[field], field);
+        }
+    });
+}
+
+function updateSolutionSelects(procIndex, optionsCache) {
+    const selects = document.querySelectorAll(`select.diary-solution-select[data-proc-index="${procIndex}"]`);
+    selects.forEach(select => {
+        const diaryIndex = parseInt(select.dataset.diaryIndex, 10);
+        const diary = generatedDiaries[diaryIndex];
+        if (!diary) {
+            return;
+        }
+        const proc = diary.procedures[procIndex];
+        if (!proc) {
+            return;
+        }
+
+        const currentValue = proc.solution || '';
+
+        if (optionsCache && Array.isArray(optionsCache) && optionsCache.length > 0) {
+            const uniqueOptions = Array.from(new Set([...optionsCache, currentValue].filter(Boolean)));
+            select.innerHTML = '';
+            uniqueOptions.forEach(optionValue => {
+                const option = document.createElement('option');
+                option.value = optionValue;
+                option.textContent = optionValue;
+                select.appendChild(option);
+            });
+        } else if (currentValue && !Array.from(select.options).some(opt => opt.value === currentValue)) {
+            const option = document.createElement('option');
+            option.value = currentValue;
+            option.textContent = currentValue;
+            select.appendChild(option);
+        }
+
+        select.value = currentValue;
+    });
+}
+
+function updateAllTotalDifferenceCells() {
+    const totalCells = document.querySelectorAll('[data-total-difference="true"]');
+    totalCells.forEach(cell => {
+        const diaryIndex = parseInt(cell.dataset.diaryIndex, 10);
+        const diary = generatedDiaries[diaryIndex];
+        if (!diary) {
+            return;
+        }
+        cell.textContent = formatDifference(diary.totalDifference);
+    });
 }
 
 // Создание формального дневника для PDF
