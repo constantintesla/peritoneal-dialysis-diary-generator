@@ -628,13 +628,13 @@ function exportToPDF() {
     pdfContainer.style.maxWidth = '210mm';
     pdfContainer.style.pageBreakBefore = 'auto'; // Не создавать разрыв перед контейнером
     
-    // Распределяем дневники по страницам: максимум 4 дневника на страницу
-    const maxDiariesPerPage = 4;
+    // Распределяем дневники по страницам: максимум 5 дневников на страницу
+    const maxDiariesPerPage = 5;
     
     let currentPageDiaries = [];
     
     generatedDiaries.forEach((diary, index) => {
-        // Если на текущей странице уже 4 дневника, создаем новую страницу
+        // Если на текущей странице уже 5 дневников, создаем новую страницу
         if (currentPageDiaries.length >= maxDiariesPerPage) {
             // Создаем страницу с накопленными дневниками
             const pageElement = createFormalDiaryPage(currentPageDiaries, false);
