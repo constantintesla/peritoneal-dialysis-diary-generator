@@ -26,37 +26,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const today = new Date().toISOString().split('T')[0];
         startDateInput.value = today;
 
-    // Обработчики событий
-    document.getElementById('solutionType').addEventListener('change', handleSolutionTypeChange);
-    document.getElementById('dialysisScheme').addEventListener('change', handleDialysisSchemeChange);
-    document.getElementById('nurseTitle').addEventListener('change', handleNurseTitleChange);
-    document.getElementById('showWeight').addEventListener('change', handleWeightToggle);
-    document.getElementById('generateBtn').addEventListener('click', generateDiaries);
-    document.getElementById('exportPdfBtn').addEventListener('click', exportToPDF);
-    document.getElementById('applyGlobalValuesBtn').addEventListener('click', applyGlobalValuesToProcedures);
-    document.getElementById('customScheme').addEventListener('input', handleCustomSchemeInput);
-    document.getElementById('customSolution').addEventListener('input', updateAllProcedureSolutionSelects);
-    const openProceduresButton = document.getElementById('openProceduresModalBtn');
-    if (openProceduresButton) {
-        openProceduresButton.addEventListener('click', openProceduresModal);
-    }
-    document.getElementById('closeProceduresModalBtn').addEventListener('click', closeProceduresModal);
-    document.getElementById('closeProceduresModalFooterBtn').addEventListener('click', closeProceduresModal);
-    document.getElementById('saveProceduresBtn').addEventListener('click', () => {
-        closeProceduresModal();
-    });
-    const proceduresModal = document.getElementById('proceduresModal');
-    if (proceduresModal) {
-        proceduresModal.addEventListener('click', (event) => {
-            if (event.target === proceduresModal) {
-                closeProceduresModal();
-            }
+        // Обработчики событий
+        document.getElementById('solutionType').addEventListener('change', handleSolutionTypeChange);
+        document.getElementById('dialysisScheme').addEventListener('change', handleDialysisSchemeChange);
+        document.getElementById('nurseTitle').addEventListener('change', handleNurseTitleChange);
+        document.getElementById('showWeight').addEventListener('change', handleWeightToggle);
+        document.getElementById('generateBtn').addEventListener('click', generateDiaries);
+        document.getElementById('exportPdfBtn').addEventListener('click', exportToPDF);
+        document.getElementById('applyGlobalValuesBtn').addEventListener('click', applyGlobalValuesToProcedures);
+        document.getElementById('customScheme').addEventListener('input', handleCustomSchemeInput);
+        document.getElementById('customSolution').addEventListener('input', updateAllProcedureSolutionSelects);
+        const openProceduresButton = document.getElementById('openProceduresModalBtn');
+        if (openProceduresButton) {
+            openProceduresButton.addEventListener('click', openProceduresModal);
+        }
+        document.getElementById('closeProceduresModalBtn').addEventListener('click', closeProceduresModal);
+        document.getElementById('closeProceduresModalFooterBtn').addEventListener('click', closeProceduresModal);
+        document.getElementById('saveProceduresBtn').addEventListener('click', () => {
+            closeProceduresModal();
         });
-    }
+        const proceduresModal = document.getElementById('proceduresModal');
+        if (proceduresModal) {
+            proceduresModal.addEventListener('click', (event) => {
+                if (event.target === proceduresModal) {
+                    closeProceduresModal();
+                }
+            });
+        }
 
-    handleNurseTitleChange();
-    showProceduresEmptyState('Выберите схему диализа, чтобы настроить манипуляции');
-    setProceduresControlsAvailability(false);
+        handleNurseTitleChange();
+        showProceduresEmptyState('Выберите схему диализа, чтобы настроить манипуляции');
+        setProceduresControlsAvailability(false);
+    } catch (error) {
+        console.error('Ошибка при инициализации:', error);
+        alert('Ошибка при загрузке приложения: ' + error.message + '\n\nПроверьте консоль браузера (F12) для деталей.');
+    }
 });
 
 function handleSolutionTypeChange() {
