@@ -735,13 +735,13 @@ function createDiaryItem(diary, diaryIndex) {
         // Температура
         const temperatureCell = document.createElement('td');
         temperatureCell.textContent = proc.temperature;
-        makeCellEditable(temperatureCell, diaryIndex, procIndex, 'temperature');
+        makeCellEditable(temperatureCell, diaryIndex, procIndex, 'temperature', { time: proc.time });
         row.appendChild(temperatureCell);
 
         // АД
         const bpCell = document.createElement('td');
         bpCell.textContent = proc.bloodPressure;
-        makeCellEditable(bpCell, diaryIndex, procIndex, 'bloodPressure');
+        makeCellEditable(bpCell, diaryIndex, procIndex, 'bloodPressure', { time: proc.time });
         row.appendChild(bpCell);
 
         if (proc.weight !== null) {
@@ -868,12 +868,15 @@ function handleSolutionChange(event) {
     updateSolutionSelects(procIndex, options);
 }
 
-function makeCellEditable(td, diaryIndex, procIndex, field) {
+function makeCellEditable(td, diaryIndex, procIndex, field, options = {}) {
     td.contentEditable = 'true';
     td.spellcheck = false;
     td.dataset.diaryIndex = diaryIndex;
     td.dataset.procIndex = procIndex;
     td.dataset.field = field;
+    if (options.time) {
+        td.dataset.procedureTime = options.time;
+    }
     td.addEventListener('blur', handleEditableCellBlur);
 }
 
@@ -882,6 +885,7 @@ function handleEditableCellBlur(event) {
     const field = td.dataset.field;
     const diaryIndex = parseInt(td.dataset.diaryIndex, 10);
     const procIndex = parseInt(td.dataset.procIndex, 10);
+    const procedureTime = td.dataset.procedureTime;
 
     if (!field || Number.isNaN(diaryIndex) || Number.isNaN(procIndex)) {
         return;
@@ -915,8 +919,19 @@ function handleEditableCellBlur(event) {
         return;
     }
 
-    if (field === 'temperature' || field === 'bloodPressure' || field === 'notes') {
-        const valueToApply = rawValue || (field === 'notes' ? '' : procedure[field]);
+    if (field === 'temperature' || field === 'bloodPressure') {
+        const valueToApply = rawValue || procedure[field];
+        const matchOptions = procedureTime ? { matchByTime: true, time: procedureTime } : undefined;
+        applyValueAcrossDiaries(procIndex, field, valueToApply, matchOptions);
+        updateEditableCells(procIndex, field);
+        if (procedureTime) {
+            updateEditableCellsByTime(procedureTime, field);
+        }
+        return;
+    }
+
+    if (field === 'notes') {
+        const valueToApply = rawValue || '';
         applyValueAcrossDiaries(procIndex, field, valueToApply);
         updateEditableCells(procIndex, field);
     }
@@ -960,35 +975,48 @@ function formatFieldValue(value, field) {
     return value != null ? String(value) : '';
 }
 
-function applyValueAcrossDiaries(procIndex, field, value) {
+function applyValueAcrossDiaries(procIndex, field, value, options = {}) {
     let differenceChanged = false;
+    const matchByTime = options && options.matchByTime && options.time;
+    const targetTime = options ? options.time : undefined;
 
     generatedDiaries.forEach(diary => {
-        const procedure = diary.procedures[procIndex];
-        if (!procedure) {
-            return;
+        const targets = [];
+        if (matchByTime) {
+            diary.procedures.forEach(proc => {
+                if (proc.time === targetTime) {
+                    targets.push(proc);
+                }
+            });
+        } else {
+            const procedure = diary.procedures[procIndex];
+            if (procedure) {
+                targets.push(procedure);
+            }
         }
 
-        if (field === 'volumeInjected') {
-            procedure.volumeInjected = value;
-            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
-            differenceChanged = true;
-        } else if (field === 'drainedVolume') {
-            procedure.drainedVolume = value;
-            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
-            differenceChanged = true;
-        } else if (field === 'difference') {
-            procedure.difference = value;
-            differenceChanged = true;
-        } else if (field === 'temperature') {
-            procedure.temperature = value;
-        } else if (field === 'bloodPressure') {
-            procedure.bloodPressure = value;
-        } else if (field === 'notes') {
-            procedure.notes = value;
-        } else if (field === 'solution') {
-            procedure.solution = value;
-        }
+        targets.forEach(procedure => {
+            if (field === 'volumeInjected') {
+                procedure.volumeInjected = value;
+                procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
+                differenceChanged = true;
+            } else if (field === 'drainedVolume') {
+                procedure.drainedVolume = value;
+                procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
+                differenceChanged = true;
+            } else if (field === 'difference') {
+                procedure.difference = value;
+                differenceChanged = true;
+            } else if (field === 'temperature') {
+                procedure.temperature = value;
+            } else if (field === 'bloodPressure') {
+                procedure.bloodPressure = value;
+            } else if (field === 'notes') {
+                procedure.notes = value;
+            } else if (field === 'solution') {
+                procedure.solution = value;
+            }
+        });
     });
 
     if (differenceChanged) {
@@ -1017,6 +1045,26 @@ function updateEditableCells(procIndex, field) {
         } else {
             cell.textContent = formatFieldValue(proc[field], field);
         }
+    });
+}
+
+function updateEditableCellsByTime(procedureTime, field) {
+    if (!procedureTime) {
+        return;
+    }
+    const cells = document.querySelectorAll(`[data-field="${field}"][data-procedure-time="${procedureTime}"]`);
+    cells.forEach(cell => {
+        const diaryIndex = parseInt(cell.dataset.diaryIndex, 10);
+        const procIndex = parseInt(cell.dataset.procIndex, 10);
+        const diary = generatedDiaries[diaryIndex];
+        if (!diary) {
+            return;
+        }
+        const proc = diary.procedures[procIndex];
+        if (!proc) {
+            return;
+        }
+        cell.textContent = formatFieldValue(proc[field], field);
     });
 }
 
