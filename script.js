@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Обработчики событий
     document.getElementById('solutionType').addEventListener('change', handleSolutionTypeChange);
     document.getElementById('dialysisScheme').addEventListener('change', handleDialysisSchemeChange);
-    document.getElementById('volumeInjected').addEventListener('change', handleVolumeInjectedChange);
     document.getElementById('nurseTitle').addEventListener('change', handleNurseTitleChange);
     document.getElementById('showWeight').addEventListener('change', handleWeightToggle);
     document.getElementById('generateBtn').addEventListener('click', generateDiaries);
@@ -159,16 +158,17 @@ function createProcedureTemplates(times) {
     // Получаем глобальные значения для инициализации
     const globalSolution = getGlobalSolution();
     const globalVolume = getGlobalVolume();
-    const globalDrainedMin = parseInt(document.getElementById('drainedMin').value) || 2100;
-    const globalDrainedMax = parseInt(document.getElementById('drainedMax').value) || 2500;
-    const globalDifference = Math.round((globalDrainedMin + globalDrainedMax) / 2) - globalVolume;
+    // По умолчанию диапазон ультрафильтрации 100-200 мл (относительно объема введенного)
+    const defaultDiffMin = 100;
+    const defaultDiffMax = 200;
     
     times.forEach((time, index) => {
         const template = {
             time: time,
             solution: globalSolution,
             volumeInjected: globalVolume,
-            difference: globalDifference
+            differenceMin: defaultDiffMin,
+            differenceMax: defaultDiffMax
         };
         procedureTemplates.push(template);
         
@@ -216,7 +216,7 @@ function createProcedureTemplates(times) {
             const idx = parseInt(e.target.dataset.procIndex);
             const volume = parseInt(e.target.value) || 0;
             procedureTemplates[idx].volumeInjected = volume;
-            updateDifferenceInput(idx);
+            updateDifferenceInputs(idx);
         });
         volumeRow.appendChild(volumeLabel);
         const volumeWrapper = document.createElement('div');
@@ -224,25 +224,57 @@ function createProcedureTemplates(times) {
         volumeRow.appendChild(volumeWrapper);
         item.appendChild(volumeRow);
         
-        // Ультрафильтрация (разница)
+        // Ультрафильтрация (диапазон относительно объема введенного)
         const diffRow = document.createElement('div');
         diffRow.className = 'procedure-setting-row';
         const diffLabel = document.createElement('label');
         diffLabel.textContent = 'Ультрафильтрация (мл):';
-        const diffInput = document.createElement('input');
-        diffInput.type = 'number';
-        diffInput.step = '50';
-        diffInput.value = template.difference;
-        diffInput.className = 'procedure-difference-input';
-        diffInput.dataset.procIndex = index;
-        diffInput.addEventListener('input', (e) => {
+        const diffRangeWrapper = document.createElement('div');
+        diffRangeWrapper.className = 'range-inputs';
+        const diffMinInput = document.createElement('input');
+        diffMinInput.type = 'number';
+        diffMinInput.step = '50';
+        diffMinInput.value = template.differenceMin || 100;
+        diffMinInput.className = 'procedure-difference-min-input';
+        diffMinInput.dataset.procIndex = index;
+        diffMinInput.addEventListener('input', (e) => {
             const idx = parseInt(e.target.dataset.procIndex);
-            procedureTemplates[idx].difference = parseInt(e.target.value) || 0;
+            const volume = procedureTemplates[idx].volumeInjected || 0;
+            const minDiff = parseInt(e.target.value) || 0;
+            procedureTemplates[idx].differenceMin = minDiff;
+            // Обновляем максимум, если он меньше минимума
+            if (procedureTemplates[idx].differenceMax < minDiff) {
+                procedureTemplates[idx].differenceMax = minDiff + 100;
+                const maxInput = item.querySelector('.procedure-difference-max-input');
+                if (maxInput) maxInput.value = procedureTemplates[idx].differenceMax;
+            }
+            updateDifferenceInputs(idx);
         });
+        const diffSpan = document.createElement('span');
+        diffSpan.textContent = '—';
+        const diffMaxInput = document.createElement('input');
+        diffMaxInput.type = 'number';
+        diffMaxInput.step = '50';
+        diffMaxInput.value = template.differenceMax || 200;
+        diffMaxInput.className = 'procedure-difference-max-input';
+        diffMaxInput.dataset.procIndex = index;
+        diffMaxInput.addEventListener('input', (e) => {
+            const idx = parseInt(e.target.dataset.procIndex);
+            const maxDiff = parseInt(e.target.value) || 0;
+            procedureTemplates[idx].differenceMax = maxDiff;
+            // Обновляем минимум, если он больше максимума
+            if (procedureTemplates[idx].differenceMin > maxDiff) {
+                procedureTemplates[idx].differenceMin = maxDiff - 100;
+                const minInput = item.querySelector('.procedure-difference-min-input');
+                if (minInput) minInput.value = procedureTemplates[idx].differenceMin;
+            }
+            updateDifferenceInputs(idx);
+        });
+        diffRangeWrapper.appendChild(diffMinInput);
+        diffRangeWrapper.appendChild(diffSpan);
+        diffRangeWrapper.appendChild(diffMaxInput);
         diffRow.appendChild(diffLabel);
-        const diffWrapper = document.createElement('div');
-        diffWrapper.appendChild(diffInput);
-        diffRow.appendChild(diffWrapper);
+        diffRow.appendChild(diffRangeWrapper);
         item.appendChild(diffRow);
         
         container.appendChild(item);
@@ -252,15 +284,11 @@ function createProcedureTemplates(times) {
     }
 }
 
-function updateDifferenceInput(procIndex) {
+function updateDifferenceInputs(procIndex) {
     const item = document.querySelector(`[data-proc-index="${procIndex}"]`);
     if (!item) return;
-    
-    const diffInput = item.querySelector('.procedure-difference-input');
-    if (diffInput && procedureTemplates[procIndex]) {
-        // Можно оставить текущее значение или пересчитать
-        // Оставляем текущее значение, чтобы пользователь мог его редактировать
-    }
+    // Функция обновляет значения диапазона ультрафильтрации при изменении объема
+    // Если нужно, можно добавить логику автоматического пересчета
 }
 
 function populateSolutionSelect(select, currentValue) {
@@ -303,26 +331,25 @@ function getGlobalSolution() {
 }
 
 function getGlobalVolume() {
-    const volumeInjectedValue = document.getElementById('volumeInjected').value;
-    const customVolume = document.getElementById('customVolume').value;
-    
-    if (volumeInjectedValue === 'custom') {
-        return parseInt(customVolume) || 2000;
+    // Получаем значение из первого шаблона, если он есть, иначе используем значение по умолчанию
+    if (procedureTemplates && procedureTemplates.length > 0 && procedureTemplates[0].volumeInjected) {
+        return procedureTemplates[0].volumeInjected;
     }
-    return parseInt(volumeInjectedValue) || 2000;
+    return 2000; // Значение по умолчанию
 }
 
 function applyGlobalValuesToProcedures() {
     const globalSolution = getGlobalSolution();
     const globalVolume = getGlobalVolume();
-    const globalDrainedMin = parseInt(document.getElementById('drainedMin').value) || 2100;
-    const globalDrainedMax = parseInt(document.getElementById('drainedMax').value) || 2500;
-    const globalDifference = Math.round((globalDrainedMin + globalDrainedMax) / 2) - globalVolume;
+    // Используем стандартные значения диапазона ультрафильтрации
+    const defaultDiffMin = 100;
+    const defaultDiffMax = 200;
     
     procedureTemplates.forEach((template, index) => {
         template.solution = globalSolution;
         template.volumeInjected = globalVolume;
-        template.difference = globalDifference;
+        template.differenceMin = defaultDiffMin;
+        template.differenceMax = defaultDiffMax;
         
         // Обновляем UI
         const item = document.querySelector(`[data-proc-index="${index}"]`);
@@ -337,9 +364,14 @@ function applyGlobalValuesToProcedures() {
                 volumeInput.value = globalVolume;
             }
             
-            const diffInput = item.querySelector('.procedure-difference-input');
-            if (diffInput) {
-                diffInput.value = globalDifference;
+            const diffMinInput = item.querySelector('.procedure-difference-min-input');
+            if (diffMinInput) {
+                diffMinInput.value = defaultDiffMin;
+            }
+            
+            const diffMaxInput = item.querySelector('.procedure-difference-max-input');
+            if (diffMaxInput) {
+                diffMaxInput.value = defaultDiffMax;
             }
         }
     });
@@ -367,16 +399,6 @@ function closeProceduresModal() {
     modal.classList.remove('visible');
     modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('modal-open');
-}
-
-function handleVolumeInjectedChange() {
-    const volume = document.getElementById('volumeInjected').value;
-    const customGroup = document.getElementById('customVolumeGroup');
-    if (volume === 'custom') {
-        customGroup.style.display = 'block';
-    } else {
-        customGroup.style.display = 'none';
-    }
 }
 
 function handleNurseTitleChange() {
@@ -439,22 +461,6 @@ function generateDiaries() {
     const customScheme = document.getElementById('customScheme').value;
     const solutionType = document.getElementById('solutionType').value;
     const customSolution = document.getElementById('customSolution').value;
-    const volumeInjectedValue = document.getElementById('volumeInjected').value;
-    const customVolume = document.getElementById('customVolume').value;
-    
-    // Определяем объем введенного раствора
-    let volumeInjected;
-    if (volumeInjectedValue === 'custom') {
-        if (!customVolume || customVolume <= 0) {
-            alert('Введите объем введенного раствора');
-            return;
-        }
-        volumeInjected = parseInt(customVolume);
-    } else {
-        volumeInjected = parseInt(volumeInjectedValue);
-    }
-    const drainedMin = parseInt(document.getElementById('drainedMin').value);
-    const drainedMax = parseInt(document.getElementById('drainedMax').value);
     const systolicMin = parseInt(document.getElementById('systolicMin').value);
     const systolicMax = parseInt(document.getElementById('systolicMax').value);
     const diastolicMin = parseInt(document.getElementById('diastolicMin').value);
@@ -547,7 +553,10 @@ function generateDiaries() {
 
             // Используем значения из шаблона
             const volumeInjected = template.volumeInjected || 2000;
-            const difference = template.difference || 0;
+            // Генерируем случайное значение ультрафильтрации из диапазона
+            const diffMin = template.differenceMin || 100;
+            const diffMax = template.differenceMax || 200;
+            const difference = randomInRange(diffMin, diffMax, 50);
             const drainedVolume = volumeInjected + difference;
             totalDifference += difference;
 

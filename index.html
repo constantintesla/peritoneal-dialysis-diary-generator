@@ -75,29 +75,6 @@
                 </div>
 
                 <div class="setting-group">
-                    <label for="volumeInjected">Объем введенного раствора (мл) (глобальное значение):</label>
-                    <select id="volumeInjected" required>
-                        <option value="2000">2000 мл</option>
-                        <option value="5000">5000 мл</option>
-                        <option value="custom">Ввести вручную</option>
-                    </select>
-                </div>
-
-                <div class="setting-group" id="customVolumeGroup" style="display: none;">
-                    <label for="customVolume">Объем введенного раствора (мл):</label>
-                    <input type="number" id="customVolume" min="0" step="50" placeholder="Например: 3000">
-                </div>
-
-                <div class="setting-group">
-                    <label>Диапазон объема слитого раствора (мл) (глобальное значение):</label>
-                    <div class="range-inputs">
-                        <input type="number" id="drainedMin" value="2100" min="0" step="50" required>
-                        <span>—</span>
-                        <input type="number" id="drainedMax" value="2500" min="0" step="50" required>
-                    </div>
-                </div>
-
-                <div class="setting-group">
                     <label>Диапазон систолического АД:</label>
                     <div class="range-inputs">
                         <input type="number" id="systolicMin" value="124" min="0" required>
