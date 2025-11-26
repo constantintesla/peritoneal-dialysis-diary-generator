@@ -698,6 +698,8 @@ function createDiaryItem(diary, diaryIndex) {
 
     // Тело таблицы
     const tbody = document.createElement('tbody');
+    const timeMergeMeta = buildTimeMergeMeta(diary.procedures);
+
     diary.procedures.forEach((proc, procIndex) => {
         const row = document.createElement('tr');
         row.dataset.diaryIndex = diaryIndex;
@@ -732,17 +734,29 @@ function createDiaryItem(diary, diaryIndex) {
         makeCellEditable(differenceCell, diaryIndex, procIndex, 'difference');
         row.appendChild(differenceCell);
 
+        const mergeMeta = timeMergeMeta[procIndex];
+
         // Температура
-        const temperatureCell = document.createElement('td');
-        temperatureCell.textContent = proc.temperature;
-        makeCellEditable(temperatureCell, diaryIndex, procIndex, 'temperature', { time: proc.time });
-        row.appendChild(temperatureCell);
+        if (mergeMeta.render) {
+            const temperatureCell = document.createElement('td');
+            temperatureCell.textContent = proc.temperature;
+            if (mergeMeta.rowspan > 1) {
+                temperatureCell.rowSpan = mergeMeta.rowspan;
+            }
+            makeCellEditable(temperatureCell, diaryIndex, procIndex, 'temperature', { time: proc.time });
+            row.appendChild(temperatureCell);
+        }
 
         // АД
-        const bpCell = document.createElement('td');
-        bpCell.textContent = proc.bloodPressure;
-        makeCellEditable(bpCell, diaryIndex, procIndex, 'bloodPressure', { time: proc.time });
-        row.appendChild(bpCell);
+        if (mergeMeta.render) {
+            const bpCell = document.createElement('td');
+            bpCell.textContent = proc.bloodPressure;
+            if (mergeMeta.rowspan > 1) {
+                bpCell.rowSpan = mergeMeta.rowspan;
+            }
+            makeCellEditable(bpCell, diaryIndex, procIndex, 'bloodPressure', { time: proc.time });
+            row.appendChild(bpCell);
+        }
 
         if (proc.weight !== null) {
             const weightCell = document.createElement('td');
@@ -796,6 +810,26 @@ function createDiaryItem(diary, diaryIndex) {
     diaryDiv.appendChild(signatures);
 
     return diaryDiv;
+}
+
+function buildTimeMergeMeta(procedures) {
+    const meta = procedures.map(() => ({ render: false, rowspan: 1 }));
+    let index = 0;
+    while (index < procedures.length) {
+        const time = procedures[index].time;
+        let span = 1;
+        let pointer = index + 1;
+        while (pointer < procedures.length && procedures[pointer].time === time) {
+            span += 1;
+            pointer += 1;
+        }
+        meta[index] = { render: true, rowspan: span };
+        for (let offset = index + 1; offset < pointer; offset += 1) {
+            meta[offset] = { render: false, rowspan: 0 };
+        }
+        index = pointer;
+    }
+    return meta;
 }
 
 function getAvailableSolutionOptions(currentSolution) {
