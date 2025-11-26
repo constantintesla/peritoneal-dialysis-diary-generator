@@ -160,8 +160,39 @@
         </div>
     </div>
 
-    <script src="html2pdf.bundle.min.js"></script>
-    <script src="script.js"></script>
+    <script>
+        // Проверка загрузки всех необходимых файлов
+        window.addEventListener('error', function(e) {
+            console.error('Ошибка загрузки файла:', e.filename, e.message);
+            if (e.filename && (e.filename.includes('.css') || e.filename.includes('.js'))) {
+                alert('Ошибка загрузки файла: ' + e.filename + '\n\nУбедитесь, что все файлы находятся в одной папке:\n- index.html\n- styles.css\n- script.js\n- html2pdf.bundle.min.js');
+            }
+        }, true);
+        
+        // Проверка наличия необходимых файлов после загрузки
+        window.addEventListener('load', function() {
+            const stylesLoaded = document.styleSheets.length > 0;
+            const html2pdfLoaded = typeof html2pdf !== 'undefined';
+            
+            if (!stylesLoaded) {
+                console.error('CSS файл не загружен!');
+                alert('Ошибка: файл styles.css не загружен!\n\nУбедитесь, что файл styles.css находится в той же папке, что и index.html');
+            }
+            
+            if (!html2pdfLoaded) {
+                console.error('Библиотека html2pdf не загружена!');
+                alert('Ошибка: библиотека html2pdf.bundle.min.js не загружена!\n\nУбедитесь, что файл html2pdf.bundle.min.js находится в той же папке, что и index.html');
+            }
+            
+            // Проверка основных функций
+            if (typeof generateDiaries === 'undefined') {
+                console.error('Функция generateDiaries не найдена!');
+                alert('Ошибка: файл script.js не загружен или содержит ошибки!\n\nУбедитесь, что файл script.js находится в той же папке, что и index.html');
+            }
+        });
+    </script>
+    <script src="html2pdf.bundle.min.js" onerror="alert('Ошибка загрузки html2pdf.bundle.min.js! Убедитесь, что файл находится в той же папке, что и index.html')"></script>
+    <script src="script.js" onerror="alert('Ошибка загрузки script.js! Убедитесь, что файл находится в той же папке, что и index.html')"></script>
 </body>
 </html>
 

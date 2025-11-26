@@ -13,9 +13,18 @@ let procedureTemplates = []; // Шаблоны для каждой манипу�
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    // Установить сегодняшнюю дату по умолчанию
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('startDate').value = today;
+    try {
+        // Проверка наличия необходимых элементов
+        const startDateInput = document.getElementById('startDate');
+        if (!startDateInput) {
+            console.error('Элемент startDate не найден!');
+            alert('Ошибка: HTML файл поврежден или элементы не найдены. Проверьте файл index.html');
+            return;
+        }
+        
+        // Установить сегодняшнюю дату по умолчанию
+        const today = new Date().toISOString().split('T')[0];
+        startDateInput.value = today;
 
     // Обработчики событий
     document.getElementById('solutionType').addEventListener('change', handleSolutionTypeChange);
