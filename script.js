@@ -704,6 +704,8 @@ function createDiaryItem(diary, diaryIndex) {
 
     // Тело таблицы
     const tbody = document.createElement('tbody');
+    const timeMergeMeta = buildTimeMergeMeta(diary.procedures);
+
     diary.procedures.forEach((proc, procIndex) => {
         const row = document.createElement('tr');
         row.dataset.diaryIndex = diaryIndex;
@@ -738,17 +740,29 @@ function createDiaryItem(diary, diaryIndex) {
         makeCellEditable(differenceCell, diaryIndex, procIndex, 'difference');
         row.appendChild(differenceCell);
 
+        const mergeMeta = timeMergeMeta[procIndex];
+
         // Температура
-        const temperatureCell = document.createElement('td');
-        temperatureCell.textContent = proc.temperature;
-        makeCellEditable(temperatureCell, diaryIndex, procIndex, 'temperature');
-        row.appendChild(temperatureCell);
+        if (mergeMeta.render) {
+            const temperatureCell = document.createElement('td');
+            temperatureCell.textContent = proc.temperature;
+            if (mergeMeta.rowspan > 1) {
+                temperatureCell.rowSpan = mergeMeta.rowspan;
+            }
+            makeCellEditable(temperatureCell, diaryIndex, procIndex, 'temperature', { time: proc.time });
+            row.appendChild(temperatureCell);
+        }
 
         // АД
-        const bpCell = document.createElement('td');
-        bpCell.textContent = proc.bloodPressure;
-        makeCellEditable(bpCell, diaryIndex, procIndex, 'bloodPressure');
-        row.appendChild(bpCell);
+        if (mergeMeta.render) {
+            const bpCell = document.createElement('td');
+            bpCell.textContent = proc.bloodPressure;
+            if (mergeMeta.rowspan > 1) {
+                bpCell.rowSpan = mergeMeta.rowspan;
+            }
+            makeCellEditable(bpCell, diaryIndex, procIndex, 'bloodPressure', { time: proc.time });
+            row.appendChild(bpCell);
+        }
 
         if (proc.weight !== null) {
             const weightCell = document.createElement('td');
@@ -802,6 +816,26 @@ function createDiaryItem(diary, diaryIndex) {
     diaryDiv.appendChild(signatures);
 
     return diaryDiv;
+}
+
+function buildTimeMergeMeta(procedures) {
+    const meta = procedures.map(() => ({ render: false, rowspan: 1 }));
+    let index = 0;
+    while (index < procedures.length) {
+        const time = procedures[index].time;
+        let span = 1;
+        let pointer = index + 1;
+        while (pointer < procedures.length && procedures[pointer].time === time) {
+            span += 1;
+            pointer += 1;
+        }
+        meta[index] = { render: true, rowspan: span };
+        for (let offset = index + 1; offset < pointer; offset += 1) {
+            meta[offset] = { render: false, rowspan: 0 };
+        }
+        index = pointer;
+    }
+    return meta;
 }
 
 function getAvailableSolutionOptions(currentSolution) {
@@ -870,16 +904,19 @@ function handleSolutionChange(event) {
 
     const selectedValue = select.value;
     const options = getAvailableSolutionOptions(selectedValue);
-    applyValueAcrossDiaries(procIndex, 'solution', selectedValue, diaryIndex);
+    applyValueAcrossDiaries(procIndex, 'solution', selectedValue, { diaryIndex: diaryIndex });
     updateSolutionSelects(procIndex, options, diaryIndex);
 }
 
-function makeCellEditable(td, diaryIndex, procIndex, field) {
+function makeCellEditable(td, diaryIndex, procIndex, field, options = {}) {
     td.contentEditable = 'true';
     td.spellcheck = false;
     td.dataset.diaryIndex = diaryIndex;
     td.dataset.procIndex = procIndex;
     td.dataset.field = field;
+    if (options.time) {
+        td.dataset.procedureTime = options.time;
+    }
     td.addEventListener('blur', handleEditableCellBlur);
 }
 
@@ -888,6 +925,7 @@ function handleEditableCellBlur(event) {
     const field = td.dataset.field;
     const diaryIndex = parseInt(td.dataset.diaryIndex, 10);
     const procIndex = parseInt(td.dataset.procIndex, 10);
+    const procedureTime = td.dataset.procedureTime;
 
     if (!field || Number.isNaN(diaryIndex) || Number.isNaN(procIndex)) {
         return;
@@ -912,7 +950,7 @@ function handleEditableCellBlur(event) {
             return;
         }
 
-        const differenceChanged = applyValueAcrossDiaries(procIndex, field, numericValue, diaryIndex);
+        const differenceChanged = applyValueAcrossDiaries(procIndex, field, numericValue, { diaryIndex: diaryIndex });
         updateEditableCells(procIndex, field, diaryIndex);
         if (differenceChanged) {
             updateEditableCells(procIndex, 'difference', diaryIndex);
@@ -921,9 +959,20 @@ function handleEditableCellBlur(event) {
         return;
     }
 
-    if (field === 'temperature' || field === 'bloodPressure' || field === 'notes') {
-        const valueToApply = rawValue || (field === 'notes' ? '' : procedure[field]);
-        applyValueAcrossDiaries(procIndex, field, valueToApply, diaryIndex);
+    if (field === 'temperature' || field === 'bloodPressure') {
+        const valueToApply = rawValue || procedure[field];
+        const matchOptions = procedureTime ? { matchByTime: true, time: procedureTime, diaryIndex: diaryIndex } : { diaryIndex: diaryIndex };
+        applyValueAcrossDiaries(procIndex, field, valueToApply, matchOptions);
+        updateEditableCells(procIndex, field, diaryIndex);
+        if (procedureTime) {
+            updateEditableCellsByTime(procedureTime, field);
+        }
+        return;
+    }
+
+    if (field === 'notes') {
+        const valueToApply = rawValue || '';
+        applyValueAcrossDiaries(procIndex, field, valueToApply, { diaryIndex: diaryIndex });
         updateEditableCells(procIndex, field, diaryIndex);
     }
 }
@@ -966,9 +1015,12 @@ function formatFieldValue(value, field) {
     return value != null ? String(value) : '';
 }
 
-function applyValueAcrossDiaries(procIndex, field, value, diaryIndex = null) {
+function applyValueAcrossDiaries(procIndex, field, value, options = {}) {
     let differenceChanged = false;
     const syncEnabled = document.getElementById('syncDiaries').checked;
+    const diaryIndex = options && options.diaryIndex !== undefined ? options.diaryIndex : null;
+    const matchByTime = options && options.matchByTime && options.time;
+    const targetTime = options ? options.time : undefined;
     
     // Если синхронизация выключена и указан конкретный дневник, применяем только к нему
     const diariesToUpdate = (!syncEnabled && diaryIndex !== null) 
@@ -976,32 +1028,42 @@ function applyValueAcrossDiaries(procIndex, field, value, diaryIndex = null) {
         : generatedDiaries;
 
     diariesToUpdate.forEach((diary, index) => {
-        const actualDiaryIndex = (!syncEnabled && diaryIndex !== null) ? diaryIndex : index;
-        const procedure = diary.procedures[procIndex];
-        if (!procedure) {
-            return;
+        const targets = [];
+        if (matchByTime) {
+            diary.procedures.forEach(proc => {
+                if (proc.time === targetTime) {
+                    targets.push(proc);
+                }
+            });
+        } else {
+            const procedure = diary.procedures[procIndex];
+            if (procedure) {
+                targets.push(procedure);
+            }
         }
 
-        if (field === 'volumeInjected') {
-            procedure.volumeInjected = value;
-            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
-            differenceChanged = true;
-        } else if (field === 'drainedVolume') {
-            procedure.drainedVolume = value;
-            procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
-            differenceChanged = true;
-        } else if (field === 'difference') {
-            procedure.difference = value;
-            differenceChanged = true;
-        } else if (field === 'temperature') {
-            procedure.temperature = value;
-        } else if (field === 'bloodPressure') {
-            procedure.bloodPressure = value;
-        } else if (field === 'notes') {
-            procedure.notes = value;
-        } else if (field === 'solution') {
-            procedure.solution = value;
-        }
+        targets.forEach(procedure => {
+            if (field === 'volumeInjected') {
+                procedure.volumeInjected = value;
+                procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
+                differenceChanged = true;
+            } else if (field === 'drainedVolume') {
+                procedure.drainedVolume = value;
+                procedure.difference = procedure.drainedVolume - procedure.volumeInjected;
+                differenceChanged = true;
+            } else if (field === 'difference') {
+                procedure.difference = value;
+                differenceChanged = true;
+            } else if (field === 'temperature') {
+                procedure.temperature = value;
+            } else if (field === 'bloodPressure') {
+                procedure.bloodPressure = value;
+            } else if (field === 'notes') {
+                procedure.notes = value;
+            } else if (field === 'solution') {
+                procedure.solution = value;
+            }
+        });
     });
 
     if (differenceChanged) {
@@ -1041,6 +1103,26 @@ function updateEditableCells(procIndex, field, diaryIndex = null) {
         } else {
             cell.textContent = formatFieldValue(proc[field], field);
         }
+    });
+}
+
+function updateEditableCellsByTime(procedureTime, field) {
+    if (!procedureTime) {
+        return;
+    }
+    const cells = document.querySelectorAll(`[data-field="${field}"][data-procedure-time="${procedureTime}"]`);
+    cells.forEach(cell => {
+        const diaryIndex = parseInt(cell.dataset.diaryIndex, 10);
+        const procIndex = parseInt(cell.dataset.procIndex, 10);
+        const diary = generatedDiaries[diaryIndex];
+        if (!diary) {
+            return;
+        }
+        const proc = diary.procedures[procIndex];
+        if (!proc) {
+            return;
+        }
+        cell.textContent = formatFieldValue(proc[field], field);
     });
 }
 
