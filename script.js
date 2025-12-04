@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dialysisScheme').addEventListener('change', handleDialysisSchemeChange);
         document.getElementById('nurseTitle').addEventListener('change', handleNurseTitleChange);
         document.getElementById('showWeight').addEventListener('change', handleWeightToggle);
+        document.getElementById('syncDiaries').addEventListener('change', handleSyncDiariesToggle);
         document.getElementById('generateBtn').addEventListener('click', generateDiaries);
         document.getElementById('exportPdfBtn').addEventListener('click', exportToPDF);
         document.getElementById('applyGlobalValuesBtn').addEventListener('click', applyGlobalValuesToProcedures);
@@ -428,6 +429,11 @@ function handleWeightToggle() {
     const showWeight = document.getElementById('showWeight').checked;
     const weightGroup = document.getElementById('weightRangeGroup');
     weightGroup.style.display = showWeight ? 'block' : 'none';
+}
+
+function handleSyncDiariesToggle() {
+    // Функция для обработки переключения синхронизации
+    // Логика уже реализована в applyValueAcrossDiaries через проверку чекбокса
 }
 
 // Генерация случайного числа в диапазоне
@@ -898,8 +904,8 @@ function handleSolutionChange(event) {
 
     const selectedValue = select.value;
     const options = getAvailableSolutionOptions(selectedValue);
-    applyValueAcrossDiaries(procIndex, 'solution', selectedValue);
-    updateSolutionSelects(procIndex, options);
+    applyValueAcrossDiaries(procIndex, 'solution', selectedValue, { diaryIndex: diaryIndex });
+    updateSolutionSelects(procIndex, options, diaryIndex);
 }
 
 function makeCellEditable(td, diaryIndex, procIndex, field, options = {}) {
@@ -944,10 +950,10 @@ function handleEditableCellBlur(event) {
             return;
         }
 
-        const differenceChanged = applyValueAcrossDiaries(procIndex, field, numericValue);
-        updateEditableCells(procIndex, field);
+        const differenceChanged = applyValueAcrossDiaries(procIndex, field, numericValue, { diaryIndex: diaryIndex });
+        updateEditableCells(procIndex, field, diaryIndex);
         if (differenceChanged) {
-            updateEditableCells(procIndex, 'difference');
+            updateEditableCells(procIndex, 'difference', diaryIndex);
             updateAllTotalDifferenceCells();
         }
         return;
@@ -955,9 +961,9 @@ function handleEditableCellBlur(event) {
 
     if (field === 'temperature' || field === 'bloodPressure') {
         const valueToApply = rawValue || procedure[field];
-        const matchOptions = procedureTime ? { matchByTime: true, time: procedureTime } : undefined;
+        const matchOptions = procedureTime ? { matchByTime: true, time: procedureTime, diaryIndex: diaryIndex } : { diaryIndex: diaryIndex };
         applyValueAcrossDiaries(procIndex, field, valueToApply, matchOptions);
-        updateEditableCells(procIndex, field);
+        updateEditableCells(procIndex, field, diaryIndex);
         if (procedureTime) {
             updateEditableCellsByTime(procedureTime, field);
         }
@@ -966,8 +972,8 @@ function handleEditableCellBlur(event) {
 
     if (field === 'notes') {
         const valueToApply = rawValue || '';
-        applyValueAcrossDiaries(procIndex, field, valueToApply);
-        updateEditableCells(procIndex, field);
+        applyValueAcrossDiaries(procIndex, field, valueToApply, { diaryIndex: diaryIndex });
+        updateEditableCells(procIndex, field, diaryIndex);
     }
 }
 
@@ -1011,10 +1017,17 @@ function formatFieldValue(value, field) {
 
 function applyValueAcrossDiaries(procIndex, field, value, options = {}) {
     let differenceChanged = false;
+    const syncEnabled = document.getElementById('syncDiaries').checked;
+    const diaryIndex = options && options.diaryIndex !== undefined ? options.diaryIndex : null;
     const matchByTime = options && options.matchByTime && options.time;
     const targetTime = options ? options.time : undefined;
+    
+    // Если синхронизация выключена и указан конкретный дневник, применяем только к нему
+    const diariesToUpdate = (!syncEnabled && diaryIndex !== null) 
+        ? [generatedDiaries[diaryIndex]].filter(Boolean)
+        : generatedDiaries;
 
-    generatedDiaries.forEach(diary => {
+    diariesToUpdate.forEach((diary, index) => {
         const targets = [];
         if (matchByTime) {
             diary.procedures.forEach(proc => {
@@ -1054,7 +1067,8 @@ function applyValueAcrossDiaries(procIndex, field, value, options = {}) {
     });
 
     if (differenceChanged) {
-        generatedDiaries.forEach(diary => {
+        // Обновляем totalDifference только для затронутых дневников
+        diariesToUpdate.forEach(diary => {
             diary.totalDifference = diary.procedures.reduce((sum, proc) => sum + (proc.difference || 0), 0);
         });
     }
@@ -1062,11 +1076,21 @@ function applyValueAcrossDiaries(procIndex, field, value, options = {}) {
     return differenceChanged;
 }
 
-function updateEditableCells(procIndex, field) {
-    const cells = document.querySelectorAll(`[data-field="${field}"][data-proc-index="${procIndex}"]`);
+function updateEditableCells(procIndex, field, diaryIndex = null) {
+    const syncEnabled = document.getElementById('syncDiaries').checked;
+    let cells;
+    
+    if (!syncEnabled && diaryIndex !== null) {
+        // Обновляем только ячейки указанного дневника
+        cells = document.querySelectorAll(`[data-field="${field}"][data-proc-index="${procIndex}"][data-diary-index="${diaryIndex}"]`);
+    } else {
+        // Обновляем все ячейки
+        cells = document.querySelectorAll(`[data-field="${field}"][data-proc-index="${procIndex}"]`);
+    }
+    
     cells.forEach(cell => {
-        const diaryIndex = parseInt(cell.dataset.diaryIndex, 10);
-        const diary = generatedDiaries[diaryIndex];
+        const cellDiaryIndex = parseInt(cell.dataset.diaryIndex, 10);
+        const diary = generatedDiaries[cellDiaryIndex];
         if (!diary) {
             return;
         }
@@ -1102,11 +1126,21 @@ function updateEditableCellsByTime(procedureTime, field) {
     });
 }
 
-function updateSolutionSelects(procIndex, optionsCache) {
-    const selects = document.querySelectorAll(`select.diary-solution-select[data-proc-index="${procIndex}"]`);
+function updateSolutionSelects(procIndex, optionsCache, diaryIndex = null) {
+    const syncEnabled = document.getElementById('syncDiaries').checked;
+    let selects;
+    
+    if (!syncEnabled && diaryIndex !== null) {
+        // Обновляем только селекты указанного дневника
+        selects = document.querySelectorAll(`select.diary-solution-select[data-proc-index="${procIndex}"][data-diary-index="${diaryIndex}"]`);
+    } else {
+        // Обновляем все селекты
+        selects = document.querySelectorAll(`select.diary-solution-select[data-proc-index="${procIndex}"]`);
+    }
+    
     selects.forEach(select => {
-        const diaryIndex = parseInt(select.dataset.diaryIndex, 10);
-        const diary = generatedDiaries[diaryIndex];
+        const selectDiaryIndex = parseInt(select.dataset.diaryIndex, 10);
+        const diary = generatedDiaries[selectDiaryIndex];
         if (!diary) {
             return;
         }
