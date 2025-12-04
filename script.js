@@ -31,7 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dialysisScheme').addEventListener('change', handleDialysisSchemeChange);
         document.getElementById('nurseTitle').addEventListener('change', handleNurseTitleChange);
         document.getElementById('showWeight').addEventListener('change', handleWeightToggle);
-        document.getElementById('syncDiaries').addEventListener('change', handleSyncDiariesToggle);
+        const syncDiariesCheckbox = document.getElementById('syncDiaries');
+        if (syncDiariesCheckbox) {
+            syncDiariesCheckbox.addEventListener('change', handleSyncDiariesToggle);
+        }
         document.getElementById('generateBtn').addEventListener('click', generateDiaries);
         document.getElementById('exportPdfBtn').addEventListener('click', exportToPDF);
         document.getElementById('applyGlobalValuesBtn').addEventListener('click', applyGlobalValuesToProcedures);
@@ -1017,7 +1020,8 @@ function formatFieldValue(value, field) {
 
 function applyValueAcrossDiaries(procIndex, field, value, options = {}) {
     let differenceChanged = false;
-    const syncEnabled = document.getElementById('syncDiaries').checked;
+    const syncDiariesElement = document.getElementById('syncDiaries');
+    const syncEnabled = syncDiariesElement ? syncDiariesElement.checked : true; // По умолчанию включено, если элемент не найден
     const diaryIndex = options && options.diaryIndex !== undefined ? options.diaryIndex : null;
     const matchByTime = options && options.matchByTime && options.time;
     const targetTime = options ? options.time : undefined;
@@ -1077,7 +1081,8 @@ function applyValueAcrossDiaries(procIndex, field, value, options = {}) {
 }
 
 function updateEditableCells(procIndex, field, diaryIndex = null) {
-    const syncEnabled = document.getElementById('syncDiaries').checked;
+    const syncDiariesElement = document.getElementById('syncDiaries');
+    const syncEnabled = syncDiariesElement ? syncDiariesElement.checked : true; // По умолчанию включено, если элемент не найден
     let cells;
     
     if (!syncEnabled && diaryIndex !== null) {
@@ -1127,7 +1132,8 @@ function updateEditableCellsByTime(procedureTime, field) {
 }
 
 function updateSolutionSelects(procIndex, optionsCache, diaryIndex = null) {
-    const syncEnabled = document.getElementById('syncDiaries').checked;
+    const syncDiariesElement = document.getElementById('syncDiaries');
+    const syncEnabled = syncDiariesElement ? syncDiariesElement.checked : true; // По умолчанию включено, если элемент не найден
     let selects;
     
     if (!syncEnabled && diaryIndex !== null) {
@@ -1265,7 +1271,7 @@ function createFormalDiaryItem(diary) {
             const temperatureCell = document.createElement('td');
             temperatureCell.textContent = proc.temperature || '';
             if (mergeMeta.rowspan > 1) {
-                temperatureCell.rowSpan = mergeMeta.rowspan;
+                temperatureCell.setAttribute('rowspan', mergeMeta.rowspan);
             }
             row.appendChild(temperatureCell);
         }
@@ -1275,7 +1281,7 @@ function createFormalDiaryItem(diary) {
             const bpCell = document.createElement('td');
             bpCell.textContent = proc.bloodPressure || '';
             if (mergeMeta.rowspan > 1) {
-                bpCell.rowSpan = mergeMeta.rowspan;
+                bpCell.setAttribute('rowspan', mergeMeta.rowspan);
             }
             row.appendChild(bpCell);
         }
