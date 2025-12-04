@@ -1194,44 +1194,71 @@ function createFormalDiaryItem(diary) {
 
     // Тело таблицы
     const tbody = document.createElement('tbody');
-    diary.procedures.forEach(proc => {
+    const timeMergeMeta = buildTimeMergeMeta(diary.procedures);
+    
+    diary.procedures.forEach((proc, procIndex) => {
         const row = document.createElement('tr');
-        // Убеждаемся, что название раствора правильно отображается
-        const solutionName = proc.solution || '';
-        const cells = [
-            proc.time || '',
-            solutionName,
-            (proc.volumeInjected != null && proc.volumeInjected !== undefined ? String(proc.volumeInjected) : ''),
-            (proc.drainedVolume != null && proc.drainedVolume !== undefined ? String(proc.drainedVolume) : ''),
-            proc.difference != null && proc.difference !== undefined ? (proc.difference > 0 ? `+${proc.difference}` : String(proc.difference)) : '',
-            proc.temperature || '',
-            proc.bloodPressure || ''
-        ];
-
-        if (proc.weight !== null && proc.weight !== undefined) {
-            const weightValue = proc.weight != null ? (typeof proc.weight === 'string' ? proc.weight : proc.weight.toString()) : '';
-            cells.splice(7, 0, weightValue);
-        }
-        cells.push(proc.notes || '');
-
-        cells.forEach(cellText => {
-            const td = document.createElement('td');
-            // Безопасное преобразование в строку
-            let textValue = '';
-            if (cellText != null) {
-                if (typeof cellText === 'string') {
-                    textValue = cellText;
-                } else if (typeof cellText === 'number') {
-                    textValue = cellText.toString();
-                } else {
-                    textValue = String(cellText);
-                }
+        const mergeMeta = timeMergeMeta[procIndex];
+        
+        // Время
+        const timeCell = document.createElement('td');
+        timeCell.textContent = proc.time || '';
+        row.appendChild(timeCell);
+        
+        // Вид раствора
+        const solutionCell = document.createElement('td');
+        solutionCell.textContent = proc.solution || '';
+        row.appendChild(solutionCell);
+        
+        // Объем введенного
+        const injectedCell = document.createElement('td');
+        injectedCell.textContent = (proc.volumeInjected != null && proc.volumeInjected !== undefined ? String(proc.volumeInjected) : '');
+        row.appendChild(injectedCell);
+        
+        // Объем слитого
+        const drainedCell = document.createElement('td');
+        drainedCell.textContent = (proc.drainedVolume != null && proc.drainedVolume !== undefined ? String(proc.drainedVolume) : '');
+        row.appendChild(drainedCell);
+        
+        // Разница
+        const differenceCell = document.createElement('td');
+        const diffValue = proc.difference != null && proc.difference !== undefined ? (proc.difference > 0 ? `+${proc.difference}` : String(proc.difference)) : '';
+        differenceCell.textContent = diffValue;
+        row.appendChild(differenceCell);
+        
+        // Температура (с объединением ячеек)
+        if (mergeMeta.render) {
+            const temperatureCell = document.createElement('td');
+            temperatureCell.textContent = proc.temperature || '';
+            if (mergeMeta.rowspan > 1) {
+                temperatureCell.rowSpan = mergeMeta.rowspan;
             }
-            // Используем createTextNode для правильной кодировки кириллицы
-            const textNode = document.createTextNode(textValue);
-            td.appendChild(textNode);
-            row.appendChild(td);
-        });
+            row.appendChild(temperatureCell);
+        }
+        
+        // АД (с объединением ячеек)
+        if (mergeMeta.render) {
+            const bpCell = document.createElement('td');
+            bpCell.textContent = proc.bloodPressure || '';
+            if (mergeMeta.rowspan > 1) {
+                bpCell.rowSpan = mergeMeta.rowspan;
+            }
+            row.appendChild(bpCell);
+        }
+        
+        // Вес (если есть)
+        if (proc.weight !== null && proc.weight !== undefined) {
+            const weightCell = document.createElement('td');
+            const weightValue = proc.weight != null ? (typeof proc.weight === 'string' ? proc.weight : proc.weight.toString()) : '';
+            weightCell.textContent = weightValue;
+            row.appendChild(weightCell);
+        }
+        
+        // Особенности
+        const notesCell = document.createElement('td');
+        notesCell.textContent = proc.notes || '';
+        row.appendChild(notesCell);
+        
         tbody.appendChild(row);
     });
 
